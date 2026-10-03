@@ -26,7 +26,7 @@
 ## Key Features
 
 - **Live Camera Barcode Scanner**: Fast barcode scanning using `expo-camera`, featuring interactive scanner reticles, camera torch controls, and instant haptic feedback via `expo-haptics`.
-- **Material You Dynamic Theming**: Deep Material Design 3 aesthetic that integrates directly with Android 12+ dynamic wallpaper colors (`@expo/ui` / `expo-router` Color APIs), paired with fallback slate/indigo palettes for consistent contrast.
+- **Material Design 3 Aesthetic**: Curated warm minimalist palette with slate/teal accents, tactile card elevations, and fluid Newsreader serif and Inter typography.
 - **Dual Display Modes**: Toggle between dense list view and cover-art-forward multi-column grid layout in your personal collection.
 - **Rich Metadata Resolution**: Automatically populates high-resolution cover artwork, authors, publication year, categories, page counts, and identifiers from Open Library and Google Books.
 - **Offline-First Persistence**: Local library storage using `@react-native-async-storage/async-storage` ensures your catalog remains accessible offline.

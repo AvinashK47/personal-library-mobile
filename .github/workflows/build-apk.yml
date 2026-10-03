@@ -42,7 +42,12 @@ jobs:
       - name: ⚙️ Expo Prebuild (Continuous Native Generation)
         run: npx expo prebuild --platform android --clean
 
+      - name: 🐘 Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
       - name: 🔨 Build Android Release APK
+        env:
+          EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK: "1"
         run: |
           cd android
           chmod +x gradlew
