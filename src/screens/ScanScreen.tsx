@@ -15,6 +15,7 @@ import {
   useCameraPermissions,
   BarcodeScanningResult,
 } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import {
   Zap,
@@ -28,6 +29,7 @@ import {
   ScanLine,
   ScanText,
   BookOpen,
+  ImagePlus,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -140,91 +142,99 @@ export const ScanScreen: React.FC = () => {
     }
   };
 
-  // "Snap & Identify" for Barcodes
-  const handleSnapAndIdentifyBarcode = async () => {
-    if (!cameraRef.current || isProcessing) return;
-
+  const processImageUri = async (uri: string, mode: ScanMode) => {
     try {
       setIsProcessing(true);
-      setProcessingStatus('Capturing optical frame…');
-
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.9,
-        skipProcessing: false,
-      });
-
-      if (!photo?.uri) {
-        throw new Error('Failed to capture frame from camera.');
-      }
-
-      setProcessingStatus('FastAPI computer vision decoding…');
-      const scanResult = await api.scanBarcodeImage(photo.uri);
-
-      if (scanResult.detected && scanResult.candidates.length > 0) {
-        const foundIsbn = scanResult.candidates[0].isbn;
-        triggerHapticSuccess();
-        await handleResolveBook(foundIsbn);
-      } else {
-        triggerHapticError();
+      if (mode === 'ocr') {
+        setProcessingStatus('Tesseract OCR & Title Matching…');
+        const ocrResponse = await api.identifyBookFromOcr(uri);
         setIsProcessing(false);
-        Alert.alert(
-          'No Barcode Detected',
-          'The computer vision pipeline could not resolve an ISBN barcode in the image. You can switch to Cover/Spine OCR mode or enter the ISBN directly.',
-          [
-            { text: 'Try Again' },
-            {
-              text: 'Try OCR Mode',
-              onPress: () => setScanMode('ocr'),
-            },
-            {
-              text: 'Enter ISBN',
-              onPress: () => setManualModalVisible(true),
-            },
-          ]
-        );
+        triggerHapticSuccess();
+        setOcrResult(ocrResponse);
+        setOcrModalVisible(true);
+      } else {
+        setProcessingStatus('FastAPI computer vision decoding…');
+        const scanResult = await api.scanBarcodeImage(uri);
+        if (scanResult.detected && scanResult.candidates.length > 0) {
+          const foundIsbn = scanResult.candidates[0].isbn;
+          triggerHapticSuccess();
+          await handleResolveBook(foundIsbn);
+        } else {
+          triggerHapticError();
+          setIsProcessing(false);
+          Alert.alert(
+            'No Barcode Detected',
+            'The computer vision pipeline could not resolve an ISBN barcode in the image. You can switch to Cover/Spine OCR mode or enter the ISBN directly.',
+            [
+              { text: 'Try Again' },
+              { text: 'Try OCR Mode', onPress: () => setScanMode('ocr') },
+              { text: 'Enter ISBN', onPress: () => setManualModalVisible(true) },
+            ]
+          );
+        }
       }
     } catch (err: any) {
       triggerHapticError();
       setIsProcessing(false);
       Alert.alert(
         'Scan Error',
-        err.message || 'An error occurred during barcode decoding. Check backend connection.'
+        err.message || 'An error occurred during decoding. Check backend connection.'
       );
+    }
+  };
+
+  const handlePickFromGallery = async () => {
+    if (isProcessing) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        await processImageUri(result.assets[0].uri, scanMode);
+      }
+    } catch (err: any) {
+      Alert.alert('Gallery Error', 'Could not open photo library.');
+    }
+  };
+
+  // "Snap & Identify" for Barcodes
+  const handleSnapAndIdentifyBarcode = async () => {
+    if (!cameraRef.current || isProcessing) return;
+    try {
+      setIsProcessing(true);
+      setProcessingStatus('Capturing optical frame…');
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.9,
+        skipProcessing: false,
+      });
+      if (!photo?.uri) throw new Error('Failed to capture frame from camera.');
+      await processImageUri(photo.uri, 'barcode');
+    } catch (err: any) {
+      triggerHapticError();
+      setIsProcessing(false);
+      Alert.alert('Scan Error', err.message || 'An error occurred.');
     }
   };
 
   // "Capture & Read Text" for OCR Mode
   const handleOcrCapture = async () => {
     if (!cameraRef.current || isProcessing) return;
-
     try {
       setIsProcessing(true);
       setProcessingStatus('Capturing high-resolution cover…');
-
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.95,
         skipProcessing: false,
       });
-
-      if (!photo?.uri) {
-        throw new Error('Failed to capture frame from camera.');
-      }
-
-      setProcessingStatus('Tesseract OCR & Title Matching…');
-      const ocrResponse = await api.identifyBookFromOcr(photo.uri);
-
-      setIsProcessing(false);
-      triggerHapticSuccess();
-      setOcrResult(ocrResponse);
-      setOcrModalVisible(true);
+      if (!photo?.uri) throw new Error('Failed to capture frame from camera.');
+      await processImageUri(photo.uri, 'ocr');
     } catch (err: any) {
       triggerHapticError();
       setIsProcessing(false);
-      Alert.alert(
-        'OCR Error',
-        err.message ||
-          'Failed to perform OCR recognition on this image. Ensure the backend server and Tesseract are running.'
-      );
+      Alert.alert('Scan Error', err.message || 'An error occurred.');
     }
   };
 
@@ -360,6 +370,13 @@ export const ScanScreen: React.FC = () => {
               }}
             >
               <SwitchCamera size={18} color="#FFFFFF" />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.glassButton, pressed && { opacity: 0.75 }]}
+              onPress={handlePickFromGallery}
+            >
+              <ImagePlus size={18} color="#FFFFFF" />
             </Pressable>
 
             <Pressable

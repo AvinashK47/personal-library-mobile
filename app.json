@@ -19,7 +19,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -33,6 +34,11 @@
           "cameraPermission": "Allow Personal Library to access your camera to scan book barcodes."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "546f67d7-dbaa-4cba-92e1-966a66c0a9b1"
+      }
+    }
   }
 }
