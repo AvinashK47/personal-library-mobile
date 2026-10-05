@@ -30,10 +30,12 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "expo-mcp": "~0.2.1",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start --localhost",
+    "start:mcp": "EXPO_UNSTABLE_MCP_SERVER=1 expo start",
     "start:lan": "expo start",
     "start:tunnel": "expo start --tunnel",
     "android": "expo run:android",
