@@ -1,14 +1,28 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { BookOpen, ScanText } from 'lucide-react-native';
 import { colors, typography } from '../theme/colors';
 
 const { width } = Dimensions.get('window');
-const RETICLE_WIDTH = width * 0.82;
-const RETICLE_HEIGHT = RETICLE_WIDTH * 0.52;
+const BARCODE_WIDTH = width * 0.82;
+const BARCODE_HEIGHT = BARCODE_WIDTH * 0.52;
 
-export const BarcodeScannerReticle: React.FC = () => {
+const OCR_WIDTH = width * 0.76;
+const OCR_HEIGHT = OCR_WIDTH * 1.35; // Standard 3:4 portrait book aspect ratio
+
+interface BarcodeScannerReticleProps {
+  mode?: 'barcode' | 'ocr';
+}
+
+export const BarcodeScannerReticle: React.FC<BarcodeScannerReticleProps> = ({
+  mode = 'barcode',
+}) => {
+  const isOcr = mode === 'ocr';
   const animatedValue = useRef(new Animated.Value(0)).current;
   const pulseValue = useRef(new Animated.Value(0.6)).current;
+
+  const currentHeight = isOcr ? OCR_HEIGHT : BARCODE_HEIGHT;
+  const currentWidth = isOcr ? OCR_WIDTH : BARCODE_WIDTH;
 
   useEffect(() => {
     // Laser line scan loop
@@ -16,12 +30,12 @@ export const BarcodeScannerReticle: React.FC = () => {
       Animated.sequence([
         Animated.timing(animatedValue, {
           toValue: 1,
-          duration: 2200,
+          duration: isOcr ? 2800 : 2200,
           useNativeDriver: true,
         }),
         Animated.timing(animatedValue, {
           toValue: 0,
-          duration: 2200,
+          duration: isOcr ? 2800 : 2200,
           useNativeDriver: true,
         }),
       ])
@@ -50,16 +64,25 @@ export const BarcodeScannerReticle: React.FC = () => {
       scanLoop.stop();
       pulseLoop.stop();
     };
-  }, [animatedValue, pulseValue]);
+  }, [animatedValue, pulseValue, isOcr]);
 
   const translateY = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: [12, RETICLE_HEIGHT - 14],
+    outputRange: [12, currentHeight - 16],
   });
 
   return (
     <View style={styles.container} pointerEvents="none">
-      <View style={styles.reticleBox}>
+      <View
+        style={[
+          styles.reticleBox,
+          {
+            width: currentWidth,
+            height: currentHeight,
+          },
+          isOcr && styles.reticleBoxOcr,
+        ]}
+      >
         {/* Corner Brackets */}
         <Animated.View style={[styles.corner, styles.topLeft, { opacity: pulseValue }]} />
         <Animated.View style={[styles.corner, styles.topRight, { opacity: pulseValue }]} />
@@ -70,7 +93,14 @@ export const BarcodeScannerReticle: React.FC = () => {
         <View style={styles.crosshairH} />
         <View style={styles.crosshairV} />
 
-        {/* Animated Amber Gold Laser Line */}
+        {/* Mode Icon Watermark for OCR Mode */}
+        {isOcr && (
+          <View style={styles.ocrWatermark}>
+            <ScanText size={38} color="rgba(255, 255, 255, 0.14)" />
+          </View>
+        )}
+
+        {/* Animated Laser Line */}
         <Animated.View
           style={[
             styles.laserLine,
@@ -87,11 +117,15 @@ export const BarcodeScannerReticle: React.FC = () => {
 
       <View style={styles.instructionContainer}>
         <View style={styles.instructionBadge}>
-          <Text style={styles.instructionText}>Align book barcode or ISBN</Text>
+          <Text style={styles.instructionText}>
+            {isOcr ? 'Align book cover or spine within frame' : 'Align book barcode or ISBN'}
+          </Text>
         </View>
         <View style={styles.subInstructionBadge}>
           <Text style={styles.subInstructionText}>
-            Instant optical detection · Automatic metadata resolution
+            {isOcr
+              ? 'Tesseract OCR text recognition · Multi-provider title matching'
+              : 'Instant optical detection · Automatic metadata resolution'}
           </Text>
         </View>
       </View>
@@ -99,7 +133,7 @@ export const BarcodeScannerReticle: React.FC = () => {
   );
 };
 
-const CORNER_SIZE = 26;
+const CORNER_SIZE = 28;
 const CORNER_BORDER_WIDTH = 2.5;
 
 const styles = StyleSheet.create({
@@ -108,14 +142,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   reticleBox: {
-    width: RETICLE_WIDTH,
-    height: RETICLE_HEIGHT,
     position: 'relative',
     backgroundColor: 'rgba(9, 10, 11, 0.28)',
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     overflow: 'hidden',
+  },
+  reticleBoxOcr: {
+    borderRadius: 24,
+    backgroundColor: 'rgba(9, 10, 11, 0.22)',
+  },
+  ocrWatermark: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   corner: {
     position: 'absolute',
@@ -128,28 +169,28 @@ const styles = StyleSheet.create({
     left: 0,
     borderTopWidth: CORNER_BORDER_WIDTH,
     borderLeftWidth: CORNER_BORDER_WIDTH,
-    borderTopLeftRadius: 14,
+    borderTopLeftRadius: 16,
   },
   topRight: {
     top: 0,
     right: 0,
     borderTopWidth: CORNER_BORDER_WIDTH,
     borderRightWidth: CORNER_BORDER_WIDTH,
-    borderTopRightRadius: 14,
+    borderTopRightRadius: 16,
   },
   bottomLeft: {
     bottom: 0,
     left: 0,
     borderBottomWidth: CORNER_BORDER_WIDTH,
     borderLeftWidth: CORNER_BORDER_WIDTH,
-    borderBottomLeftRadius: 14,
+    borderBottomLeftRadius: 16,
   },
   bottomRight: {
     bottom: 0,
     right: 0,
     borderBottomWidth: CORNER_BORDER_WIDTH,
     borderRightWidth: CORNER_BORDER_WIDTH,
-    borderBottomRightRadius: 14,
+    borderBottomRightRadius: 16,
   },
   crosshairH: {
     position: 'absolute',
@@ -158,7 +199,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 1,
     marginLeft: -10,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
   },
   crosshairV: {
     position: 'absolute',
@@ -167,7 +208,7 @@ const styles = StyleSheet.create({
     width: 1,
     height: 20,
     marginTop: -10,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
   },
   laserLine: {
     height: 2,
@@ -198,35 +239,44 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   instructionContainer: {
-    marginTop: 24,
+    marginTop: 20,
     paddingHorizontal: 20,
     alignItems: 'center',
   },
   instructionBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: 'rgba(9, 10, 11, 0.85)',
+    backgroundColor: 'rgba(18, 22, 26, 0.90)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.45)',
   },
   instructionText: {
-    color: colors.text,
-    fontSize: 13,
-    fontFamily: typography.sansMedium,
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontFamily: typography.sansSemiBold,
     letterSpacing: 0.2,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   subInstructionBadge: {
     marginTop: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 3,
-    borderRadius: 12,
-    backgroundColor: 'rgba(9, 10, 11, 0.6)',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: 'rgba(18, 22, 26, 0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
   },
   subInstructionText: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontFamily: typography.sans,
+    color: 'rgba(245, 247, 250, 0.92)',
+    fontSize: 11.5,
+    fontFamily: typography.sansMedium,
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });

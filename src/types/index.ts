@@ -37,6 +37,47 @@ export interface HealthResponse {
   status: string;
 }
 
+export interface OCRIdentificationOCR {
+  text: string;
+  normalized_text: string;
+  confidence: number;
+  orientation: number | null;
+}
+
+export interface OCRIdentificationCandidate {
+  title: string | null;
+  authors: string[];
+  isbn10?: string | null;
+  isbn13?: string | null;
+  cover_url?: string | null;
+  provider?: string | null;
+  match_score: number;
+}
+
+export interface OCRIdentificationResponse {
+  detected: boolean;
+  ocr: OCRIdentificationOCR;
+  candidates: OCRIdentificationCandidate[];
+  message?: string | null;
+}
+
+export interface OCRBlock {
+  text: string;
+  confidence: number | null;
+  bbox: number[];
+}
+
+export interface OCRResponse {
+  text: string;
+  normalized_text: string;
+  blocks: OCRBlock[];
+  width: number;
+  height: number;
+  orientation: number | null;
+  engine: string;
+  message?: string | null;
+}
+
 export type RootStackParamList = {
   MainTabs: undefined;
   BookDetail: {

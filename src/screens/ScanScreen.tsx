@@ -25,6 +25,8 @@ import {
   AlertCircle,
   X,
   ScanLine,
+  ScanText,
+  BookOpen,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -33,9 +35,15 @@ import { colors, typography } from '../theme/colors';
 import { api } from '../services/api';
 import { BarcodeScannerReticle } from '../components/BarcodeScannerReticle';
 import { HeaderBadge } from '../components/HeaderBadge';
-import { RootStackParamList } from '../types';
+import { OcrResultModal } from '../components/OcrResultModal';
+import {
+  RootStackParamList,
+  OCRIdentificationResponse,
+  OCRIdentificationCandidate,
+} from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type ScanMode = 'barcode' | 'ocr';
 
 export const ScanScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -45,9 +53,14 @@ export const ScanScreen: React.FC = () => {
   const cameraRef = useRef<CameraView>(null);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [torch, setTorch] = useState<boolean>(false);
+  const [scanMode, setScanMode] = useState<ScanMode>('barcode');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [isScannedLocked, setIsScannedLocked] = useState<boolean>(false);
+
+  // OCR Results State
+  const [ocrModalVisible, setOcrModalVisible] = useState<boolean>(false);
+  const [ocrResult, setOcrResult] = useState<OCRIdentificationResponse | null>(null);
 
   // Manual ISBN Modal
   const [manualModalVisible, setManualModalVisible] = useState<boolean>(false);
@@ -83,7 +96,7 @@ export const ScanScreen: React.FC = () => {
       setIsProcessing(false);
       Alert.alert(
         'Metadata Resolution',
-        `${err.message || 'Could not fetch metadata.'}\n\nWould you like to manually add details for this volume?`,
+        `${err.message || 'Could not fetch metadata.'}\n\nWould you like to manually catalog details for this volume?`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -113,7 +126,7 @@ export const ScanScreen: React.FC = () => {
 
   // Live Barcode Scanner Callback
   const handleBarcodeScanned = async (scanningResult: BarcodeScanningResult) => {
-    if (isScannedLocked || isProcessing) return;
+    if (isScannedLocked || isProcessing || scanMode === 'ocr') return;
 
     const data = scanningResult.data?.trim();
     if (!data) return;
@@ -126,8 +139,8 @@ export const ScanScreen: React.FC = () => {
     }
   };
 
-  // "Snap & Identify" Button: Take photo and send to FastAPI Computer Vision pipeline
-  const handleSnapAndIdentify = async () => {
+  // "Snap & Identify" for Barcodes
+  const handleSnapAndIdentifyBarcode = async () => {
     if (!cameraRef.current || isProcessing) return;
 
     try {
@@ -155,9 +168,13 @@ export const ScanScreen: React.FC = () => {
         setIsProcessing(false);
         Alert.alert(
           'No Barcode Detected',
-          'The computer vision pipeline could not resolve an ISBN barcode in the image. Ensure the barcode is flat, well-lit, or enter the ISBN directly.',
+          'The computer vision pipeline could not resolve an ISBN barcode in the image. You can switch to Cover/Spine OCR mode or enter the ISBN directly.',
           [
             { text: 'Try Again' },
+            {
+              text: 'Try OCR Mode',
+              onPress: () => setScanMode('ocr'),
+            },
             {
               text: 'Enter ISBN',
               onPress: () => setManualModalVisible(true),
@@ -173,6 +190,75 @@ export const ScanScreen: React.FC = () => {
         err.message || 'An error occurred during barcode decoding. Check backend connection.'
       );
     }
+  };
+
+  // "Capture & Read Text" for OCR Mode
+  const handleOcrCapture = async () => {
+    if (!cameraRef.current || isProcessing) return;
+
+    try {
+      setIsProcessing(true);
+      setProcessingStatus('Capturing high-resolution cover…');
+
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.95,
+        skipProcessing: false,
+      });
+
+      if (!photo?.uri) {
+        throw new Error('Failed to capture frame from camera.');
+      }
+
+      setProcessingStatus('Tesseract OCR & Title Matching…');
+      const ocrResponse = await api.identifyBookFromOcr(photo.uri);
+
+      setIsProcessing(false);
+      triggerHapticSuccess();
+      setOcrResult(ocrResponse);
+      setOcrModalVisible(true);
+    } catch (err: any) {
+      triggerHapticError();
+      setIsProcessing(false);
+      Alert.alert(
+        'OCR Error',
+        err.message ||
+          'Failed to perform OCR recognition on this image. Ensure the backend server and Tesseract are running.'
+      );
+    }
+  };
+
+  const handleSelectOcrCandidate = (candidate: OCRIdentificationCandidate) => {
+    setOcrModalVisible(false);
+    navigation.navigate('BookDetail', {
+      isbn: candidate.isbn13 || candidate.isbn10 || undefined,
+      book: {
+        isbn13: candidate.isbn13,
+        isbn10: candidate.isbn10,
+        title: candidate.title,
+        authors: candidate.authors || [],
+        cover_url: candidate.cover_url,
+        subjects: [],
+      },
+      isEditingExisting: false,
+    });
+  };
+
+  const handleManualCatalogWithText = (recognizedText: string) => {
+    setOcrModalVisible(false);
+    // Grab first non-empty line as initial title suggestion
+    const lines = recognizedText.split('\n').map((l) => l.trim()).filter(Boolean);
+    const suggestedTitle = lines.length > 0 ? lines[0] : '';
+    const suggestedAuthor = lines.length > 1 ? lines[1] : '';
+
+    navigation.navigate('BookDetail', {
+      book: {
+        title: suggestedTitle,
+        authors: suggestedAuthor ? [suggestedAuthor] : [],
+        subjects: [],
+        description: `Recognized cover text:\n${recognizedText}`,
+      },
+      isEditingExisting: false,
+    });
   };
 
   const handleManualLookup = async () => {
@@ -203,8 +289,7 @@ export const ScanScreen: React.FC = () => {
         </View>
         <Text style={styles.permissionTitle}>Camera Access Required</Text>
         <Text style={styles.permissionSubtitle}>
-          Grant optical camera permission to scan book ISBN barcodes and build your personal
-          catalog.
+          Grant optical camera permission to scan book ISBN barcodes and recognize text with OCR.
         </Text>
         <Pressable
           style={({ pressed }) => [styles.grantBtn, pressed && { opacity: 0.85 }]}
@@ -233,7 +318,9 @@ export const ScanScreen: React.FC = () => {
         barcodeScannerSettings={{
           barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr'],
         }}
-        onBarcodeScanned={isScannedLocked ? undefined : handleBarcodeScanned}
+        onBarcodeScanned={
+          isScannedLocked || scanMode === 'ocr' ? undefined : handleBarcodeScanned
+        }
       />
 
       {/* Top Header Overlay with Glassmorphic Controls */}
@@ -256,9 +343,9 @@ export const ScanScreen: React.FC = () => {
               }}
             >
               {torch ? (
-                <Zap size={18} color={colors.primary} />
+                <Zap size={18} color="#1E293B" />
               ) : (
-                <ZapOff size={18} color={colors.text} />
+                <ZapOff size={18} color="#FFFFFF" />
               )}
             </Pressable>
 
@@ -271,7 +358,7 @@ export const ScanScreen: React.FC = () => {
                 setFacing(facing === 'back' ? 'front' : 'back');
               }}
             >
-              <SwitchCamera size={18} color={colors.text} />
+              <SwitchCamera size={18} color="#FFFFFF" />
             </Pressable>
 
             <Pressable
@@ -283,15 +370,74 @@ export const ScanScreen: React.FC = () => {
                 setManualModalVisible(true);
               }}
             >
-              <Keyboard size={18} color={colors.text} />
+              <Keyboard size={18} color="#FFFFFF" />
             </Pressable>
           </View>
+        </View>
+
+        {/* Scan Mode Switcher (Barcode vs. Cover / Spine OCR) */}
+        <View style={styles.modeSegmentContainer}>
+          <Pressable
+            style={[
+              styles.modeSegment,
+              scanMode === 'barcode' && styles.modeSegmentActive,
+            ]}
+            onPress={() => {
+              if (scanMode !== 'barcode') {
+                try {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                } catch {}
+                setScanMode('barcode');
+              }
+            }}
+          >
+            <ScanLine
+              size={15}
+              color={scanMode === 'barcode' ? '#0F172A' : 'rgba(255, 255, 255, 0.75)'}
+            />
+            <Text
+              style={[
+                styles.modeSegmentText,
+                scanMode === 'barcode' && styles.modeSegmentTextActive,
+              ]}
+            >
+              Barcode Mode
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[
+              styles.modeSegment,
+              scanMode === 'ocr' && styles.modeSegmentActive,
+            ]}
+            onPress={() => {
+              if (scanMode !== 'ocr') {
+                try {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                } catch {}
+                setScanMode('ocr');
+              }
+            }}
+          >
+            <ScanText
+              size={15}
+              color={scanMode === 'ocr' ? '#0F172A' : 'rgba(255, 255, 255, 0.75)'}
+            />
+            <Text
+              style={[
+                styles.modeSegmentText,
+                scanMode === 'ocr' && styles.modeSegmentTextActive,
+              ]}
+            >
+              Cover / Spine OCR
+            </Text>
+          </Pressable>
         </View>
       </View>
 
       {/* Center Reticle Viewfinder */}
       <View style={styles.reticleContainer}>
-        <BarcodeScannerReticle />
+        <BarcodeScannerReticle mode={scanMode} />
       </View>
 
       {/* Bottom Shutter Controls with Tactile Outer Ring */}
@@ -300,22 +446,38 @@ export const ScanScreen: React.FC = () => {
           <Pressable
             style={({ pressed }) => [
               styles.shutterOuterRing,
+              scanMode === 'ocr' && styles.shutterOuterRingOcr,
               pressed && styles.shutterPressed,
             ]}
             onPress={() => {
               try {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               } catch {}
-              handleSnapAndIdentify();
+              if (scanMode === 'ocr') {
+                handleOcrCapture();
+              } else {
+                handleSnapAndIdentifyBarcode();
+              }
             }}
             disabled={isProcessing}
           >
-            <View style={styles.shutterInnerCircle}>
-              <CameraIcon size={24} color={colors.background as string} />
+            <View
+              style={[
+                styles.shutterInnerCircle,
+                scanMode === 'ocr' && styles.shutterInnerCircleOcr,
+              ]}
+            >
+              {scanMode === 'ocr' ? (
+                <ScanText size={24} color={colors.background as string} />
+              ) : (
+                <CameraIcon size={24} color={colors.background as string} />
+              )}
             </View>
           </Pressable>
 
-          <Text style={styles.shutterLabel}>Snap & Identify</Text>
+          <Text style={styles.shutterLabel}>
+            {scanMode === 'ocr' ? 'Capture & Read Text (OCR)' : 'Snap Barcode'}
+          </Text>
         </View>
       </View>
 
@@ -324,14 +486,29 @@ export const ScanScreen: React.FC = () => {
         <View style={styles.hudOverlay}>
           <View style={styles.hudCard}>
             <View style={styles.hudIconCircle}>
-              <ScanLine size={26} color={colors.primary} />
+              {scanMode === 'ocr' ? (
+                <ScanText size={26} color={colors.primary} />
+              ) : (
+                <ScanLine size={26} color={colors.primary} />
+              )}
             </View>
             <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 14 }} />
-            <Text style={styles.hudTitle}>Analyzing Book</Text>
+            <Text style={styles.hudTitle}>
+              {scanMode === 'ocr' ? 'Reading Book Cover' : 'Analyzing Barcode'}
+            </Text>
             <Text style={styles.hudSubtitle}>{processingStatus}</Text>
           </View>
         </View>
       )}
+
+      {/* OCR Results Modal Sheet */}
+      <OcrResultModal
+        visible={ocrModalVisible}
+        onClose={() => setOcrModalVisible(false)}
+        result={ocrResult}
+        onSelectCandidate={handleSelectOcrCandidate}
+        onManualCatalogWithText={handleManualCatalogWithText}
+      />
 
       {/* Manual ISBN Input Modal */}
       <Modal
@@ -493,15 +670,52 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(20, 21, 24, 0.85)',
+    backgroundColor: 'rgba(18, 22, 26, 0.88)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
   },
   glassButtonActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryMuted,
+    borderColor: '#FCD34D',
+    backgroundColor: '#F59E0B',
+  },
+  modeSegmentContainer: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(18, 22, 26, 0.90)',
+    borderRadius: 24,
+    padding: 3.5,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
+  },
+  modeSegment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  modeSegmentActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  modeSegmentText: {
+    fontSize: 12.5,
+    fontFamily: typography.sansMedium,
+    color: 'rgba(255, 255, 255, 0.75)',
+  },
+  modeSegmentTextActive: {
+    color: '#0F172A',
+    fontFamily: typography.sansBold,
   },
   reticleContainer: {
     flex: 1,
@@ -526,7 +740,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    borderColor: 'rgba(255, 255, 255, 0.7)',
+  },
+  shutterOuterRingOcr: {
+    borderColor: '#38BDF8',
+    backgroundColor: 'rgba(56, 189, 248, 0.18)',
   },
   shutterInnerCircle: {
     width: 60,
@@ -536,19 +754,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  shutterInnerCircleOcr: {
+    backgroundColor: colors.primary,
+  },
   shutterPressed: {
     transform: [{ scale: 0.94 }],
     opacity: 0.9,
   },
   shutterLabel: {
-    color: colors.text,
-    fontSize: 12,
-    fontFamily: typography.sansMedium,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: typography.sansSemiBold,
     marginTop: 8,
-    letterSpacing: 0.2,
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    letterSpacing: 0.3,
+    textShadowColor: 'rgba(0, 0, 0, 0.95)',
+    textShadowOffset: { width: 0, height: 1.5 },
+    textShadowRadius: 6,
   },
   hudOverlay: {
     ...StyleSheet.absoluteFill,
