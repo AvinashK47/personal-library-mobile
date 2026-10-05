@@ -8,6 +8,7 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import {
@@ -57,7 +58,7 @@ export const OcrResultModal: React.FC<OcrResultModalProps> = ({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      <BlurView intensity={40} tint="dark" style={styles.overlay}>
         <View style={[styles.sheet, { maxHeight: height * 0.88, paddingBottom: insets.bottom + 16 }]}>
           {/* Top handle bar */}
           <View style={styles.handle} />
@@ -258,7 +259,7 @@ export const OcrResultModal: React.FC<OcrResultModalProps> = ({
             )}
           </ScrollView>
         </View>
-      </View>
+      </BlurView>
     </Modal>
   );
 };
@@ -266,7 +267,7 @@ export const OcrResultModal: React.FC<OcrResultModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: colors.overlay,
+    backgroundColor: 'rgba(0,0,0,0.3)', // Fallback layer under blur
     justifyContent: 'flex-end',
   },
   sheet: {

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { BookOpen, ScanText } from 'lucide-react-native';
 import { colors, typography } from '../theme/colors';
 
@@ -116,18 +117,18 @@ export const BarcodeScannerReticle: React.FC<BarcodeScannerReticleProps> = ({
       </View>
 
       <View style={styles.instructionContainer}>
-        <View style={styles.instructionBadge}>
+        <BlurView intensity={60} tint="dark" style={styles.instructionBadge}>
           <Text style={styles.instructionText}>
             {isOcr ? 'Align book cover or spine within frame' : 'Align book barcode or ISBN'}
           </Text>
-        </View>
-        <View style={styles.subInstructionBadge}>
+        </BlurView>
+        <BlurView intensity={40} tint="dark" style={styles.subInstructionBadge}>
           <Text style={styles.subInstructionText}>
             {isOcr
               ? 'Tesseract OCR text recognition · Multi-provider title matching'
               : 'Instant optical detection · Automatic metadata resolution'}
           </Text>
-        </View>
+        </BlurView>
       </View>
     </View>
   );
@@ -239,44 +240,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   instructionContainer: {
-    marginTop: 20,
+    marginTop: 24,
     paddingHorizontal: 20,
     alignItems: 'center',
+    gap: 10,
   },
   instructionBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: 'rgba(18, 22, 26, 0.90)',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 24,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.45)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   instructionText: {
     color: '#FFFFFF',
-    fontSize: 13.5,
+    fontSize: 14,
     fontFamily: typography.sansSemiBold,
-    letterSpacing: 0.2,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    letterSpacing: 0.3,
   },
   subInstructionBadge: {
-    marginTop: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    borderRadius: 14,
-    backgroundColor: 'rgba(18, 22, 26, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.14)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   subInstructionText: {
-    color: 'rgba(245, 247, 250, 0.92)',
-    fontSize: 11.5,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
     fontFamily: typography.sansMedium,
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
 });

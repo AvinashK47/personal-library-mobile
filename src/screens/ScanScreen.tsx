@@ -9,6 +9,7 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import {
   CameraView,
   useCameraPermissions,
@@ -376,7 +377,7 @@ export const ScanScreen: React.FC = () => {
         </View>
 
         {/* Scan Mode Switcher (Barcode vs. Cover / Spine OCR) */}
-        <View style={styles.modeSegmentContainer}>
+        <BlurView intensity={30} tint="dark" style={styles.modeSegmentContainer}>
           <Pressable
             style={[
               styles.modeSegment,
@@ -432,7 +433,7 @@ export const ScanScreen: React.FC = () => {
               Cover / Spine OCR
             </Text>
           </Pressable>
-        </View>
+        </BlurView>
       </View>
 
       {/* Center Reticle Viewfinder */}
@@ -483,7 +484,7 @@ export const ScanScreen: React.FC = () => {
 
       {/* Processing HUD Overlay */}
       {isProcessing && (
-        <View style={styles.hudOverlay}>
+        <BlurView intensity={70} tint="dark" style={styles.hudOverlay}>
           <View style={styles.hudCard}>
             <View style={styles.hudIconCircle}>
               {scanMode === 'ocr' ? (
@@ -498,7 +499,7 @@ export const ScanScreen: React.FC = () => {
             </Text>
             <Text style={styles.hudSubtitle}>{processingStatus}</Text>
           </View>
-        </View>
+        </BlurView>
       )}
 
       {/* OCR Results Modal Sheet */}
@@ -684,13 +685,12 @@ const styles = StyleSheet.create({
   modeSegmentContainer: {
     flexDirection: 'row',
     alignSelf: 'center',
-    backgroundColor: 'rgba(18, 22, 26, 0.90)',
     borderRadius: 24,
-    padding: 3.5,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
+    padding: 4,
+    marginTop: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    overflow: 'hidden',
   },
   modeSegment: {
     flexDirection: 'row',
